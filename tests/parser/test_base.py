@@ -6,7 +6,7 @@ from src.fl_studio.parser.base import FLParser, ProjectMetadata
 
 @pytest.fixture
 def test_project_path(tmp_path):
-    return Path("tests/fixtures/test.flp")
+    return Path("../fixtures/flp/try-it-out.flp")
 
 
 def test_load_project(test_project_path):
