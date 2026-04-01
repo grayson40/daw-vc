@@ -23,7 +23,7 @@ def _make_pattern(iid=1, name="Pattern 1", color=None, length=384, looped=False,
     pattern.color = color
     pattern.length = length
     pattern.looped = looped
-    pattern.notes = iter(notes or [])
+    pattern.notes = notes or []
     pattern.controllers = iter([])
     return pattern
 
@@ -75,3 +75,21 @@ def test_parse_multiple_patterns():
     assert len(result) == 2
     assert result[0]["name"] == "Verse"
     assert result[1]["name"] == "Chorus"
+
+
+def test_parse_pattern_color():
+    color = MagicMock()
+    color.__str__ = MagicMock(return_value="#FF0000")
+    pattern = _make_pattern(iid=1, name="Colored", color=color, notes=[])
+    project = _make_project(patterns=[pattern])
+    parser = FLPatternParser(project)
+    result = parser.get_state()
+    assert result[0]["color"] == "#FF0000"
+
+
+def test_parse_pattern_no_color():
+    pattern = _make_pattern(iid=1, name="No Color", color=None, notes=[])
+    project = _make_project(patterns=[pattern])
+    parser = FLPatternParser(project)
+    result = parser.get_state()
+    assert result[0]["color"] is None
