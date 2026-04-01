@@ -1,7 +1,7 @@
 import pytest
 import pyflp
 from pathlib import Path
-from src.fl_studio.parser.base import FLParser, ProjectMetadata
+from src.fl_studio.parser.base import FLParser
 
 
 @pytest.fixture
@@ -52,3 +52,46 @@ def test_pyflp_parse_exception_handling(test_project_path, monkeypatch):
     monkeypatch.setattr(pyflp, "parse", mock_parse)
     with pytest.raises(RuntimeError):
         FLParser(test_project_path)
+
+
+def test_get_state_keys():
+    """Test that get_state() returns all expected top-level keys."""
+    from unittest.mock import MagicMock, patch
+
+    mock_project = MagicMock()
+    mock_project.title = "Test"
+    mock_project.artists = ""
+    mock_project.genre = ""
+    mock_project.version = "21"
+    mock_project.tempo = 140.0
+    mock_project.ppq = 96
+    mock_project.channels = MagicMock()
+    mock_project.channels.groups = []
+    mock_project.channels.height = 0
+    mock_project.channels.fit_to_steps = False
+    mock_project.channels.swing = 0
+    mock_project.channels.samplers = []
+    mock_project.channels.instruments = []
+    mock_project.channels.layers = []
+    mock_project.channels.automations = []
+    mock_project.patterns = MagicMock()
+    mock_project.patterns.__iter__ = MagicMock(return_value=iter([]))
+    mock_project.mixer = MagicMock()
+    mock_project.mixer.__iter__ = MagicMock(return_value=iter([]))
+    mock_project.arrangements = MagicMock()
+    mock_project.arrangements.__iter__ = MagicMock(return_value=iter([]))
+
+    fake_path = MagicMock(spec=Path)
+    fake_path.is_file.return_value = True
+    fake_path.suffix = ".flp"
+
+    with patch("src.fl_studio.parser.base.pyflp.parse", return_value=mock_project):
+        parser = FLParser(fake_path)
+
+    state = parser.get_state()
+    assert "metadata" in state
+    assert "channels" in state
+    assert "patterns" in state
+    assert "mixer" in state
+    assert "plugins" in state
+    assert "playlist" in state

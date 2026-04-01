@@ -2,16 +2,10 @@ import pyflp
 from pathlib import Path
 from typing import Dict, Any
 from .channels import FLChannelParser
-
-
-class ProjectMetadata:
-    def __init__(self, title: str, artists: str, genre: str, version: str, tempo: float, ppq: int):
-        self.title = title
-        self.artists = artists
-        self.genre = genre
-        self.version = version
-        self.tempo = tempo
-        self.ppq = ppq
+from .patterns import FLPatternParser
+from .mixer import FLMixerParser
+from .plugins import FLPluginParser
+from .playlist import FLPlaylistParser
 
 
 class FLParser:
@@ -30,43 +24,22 @@ class FLParser:
             raise RuntimeError(f"Failed to parse the FLP file: {project_path}") from e
 
     def get_state(self) -> Dict[str, Any]:
-        """Get complete project state"""
+        """Get complete project state as a JSON-serializable dict."""
         return {
-            'metadata': self._parse_metadata(),
-            'modules': {
-                'channels': self._parse_channels(),
-                # 'patterns': self._parse_patterns(),
-                # 'mixer': self._parse_mixer(),
-                # 'playlist': self._parse_playlist(),
-                # 'arrangements': self._parse_arrangements()
-            }
+            'metadata': self._extract_metadata(),
+            'channels': FLChannelParser(self.project).get_state(),
+            'patterns': FLPatternParser(self.project).get_state(),
+            'mixer': FLMixerParser(self.project).get_state(),
+            'plugins': FLPluginParser(self.project).get_state(),
+            'playlist': FLPlaylistParser(self.project).get_state(),
         }
-
-    def _parse_metadata(self) -> ProjectMetadata:
-        metadata = self._extract_metadata()
-        return ProjectMetadata(**metadata)
 
     def _extract_metadata(self) -> Dict[str, Any]:
         return {
             'title': self.project.title,
             'artists': self.project.artists,
             'genre': self.project.genre,
-            'version': self.project.version,
-            'tempo': self.project.tempo,
-            'ppq': self.project.ppq
+            'version': str(self.project.version),
+            'tempo': float(self.project.tempo),
+            'ppq': self.project.ppq,
         }
-
-    def _parse_channels(self) -> Dict[str, Any]:
-        return FLChannelParser(self.project).get_state()
-
-    def _parse_patterns(self) -> Dict[str, Any]:
-        raise NotImplementedError
-
-    def _parse_mixer(self) -> Dict[str, Any]:
-        raise NotImplementedError
-
-    def _parse_playlist(self) -> Dict[str, Any]:
-        raise NotImplementedError
-
-    def _parse_arrangements(self) -> Dict[str, Any]:
-        raise NotImplementedError
