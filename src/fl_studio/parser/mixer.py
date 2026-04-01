@@ -19,7 +19,7 @@ class FLMixerParser:
             "locked": insert.locked,
             "is_solo": insert.is_solo,
             "routes": list(insert.routes),
-            "slots": [self._parse_slot(s) for s in insert],
+            "slots": [self._parse_slot(s) for s in insert],  # pyflp Insert is ModelCollection[Slot], iterable
         }
 
     def _parse_slot(self, slot: Any) -> dict:
