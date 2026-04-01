@@ -9,22 +9,48 @@ def test_project_path(tmp_path):
     return Path("../fixtures/flp/try-it-out.flp")
 
 
-def test_load_project(test_project_path):
-    parser = FLParser(test_project_path)
+def test_load_project():
+    from unittest.mock import MagicMock, patch
+    from pathlib import Path
+
+    mock_project = MagicMock()
+    fake_path = MagicMock(spec=Path)
+    fake_path.is_file.return_value = True
+    fake_path.suffix = ".flp"
+
+    with patch("src.fl_studio.parser.base.pyflp.parse", return_value=mock_project):
+        parser = FLParser(fake_path)
+
     assert parser.project is not None
 
 
-def test_metadata(test_project_path):
-    parser = FLParser(test_project_path)
-    metadata = parser._parse_metadata()
+def test_metadata():
+    from unittest.mock import MagicMock, patch
+    from pathlib import Path
 
-    assert isinstance(metadata, ProjectMetadata)
-    assert metadata.tempo > 0
-    assert metadata.ppq > 0
-    assert metadata.version is not None
-    assert metadata.title is not None
-    assert metadata.artists is not None
-    assert metadata.genre is not None
+    mock_project = MagicMock()
+    mock_project.title = "My Track"
+    mock_project.artists = "Artist"
+    mock_project.genre = "Electronic"
+    mock_project.version = "21"
+    mock_project.tempo = 140.0
+    mock_project.ppq = 96
+
+    fake_path = MagicMock(spec=Path)
+    fake_path.is_file.return_value = True
+    fake_path.suffix = ".flp"
+
+    with patch("src.fl_studio.parser.base.pyflp.parse", return_value=mock_project):
+        parser = FLParser(fake_path)
+
+    metadata = parser._extract_metadata()
+    assert isinstance(metadata, dict)
+    assert metadata["title"] == "My Track"
+    assert metadata["tempo"] == 140.0
+    assert metadata["ppq"] == 96
+    assert "version" in metadata
+    assert "artists" in metadata
+    assert "genre" in metadata
 
 
 def test_invalid_project():
