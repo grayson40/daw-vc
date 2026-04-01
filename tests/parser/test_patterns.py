@@ -61,6 +61,9 @@ def test_parse_pattern_fields():
     assert n["length"] == 96
     assert n["velocity"] == 80
     assert n["pan"] == 32
+    assert n["fine_pitch"] == 120
+    assert n["rack_channel"] == 0
+    assert n["slide"] is False
 
 
 def test_parse_multiple_patterns():
