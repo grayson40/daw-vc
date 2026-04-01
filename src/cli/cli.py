@@ -217,5 +217,94 @@ def merge(branch_name):
         raise click.ClickException("Merge failed due to conflicts.")
 
 
+@cli.command()
+@click.option('--project', 'project_name', required=True, help='Project name on remote')
+@click.option('--owner', default=None, help='Owner name (defaults to system user)')
+def push(project_name, owner):
+    """Push local commits to Supabase remote."""
+    import getpass
+    from src.remote.config import load_config, save_config
+    from src.remote.supabase_client import SupabaseRemote
+    from src.remote.sync import push as do_push
+
+    config = load_config()
+    if not config:
+        url = click.prompt("Supabase project URL")
+        key = click.prompt("Supabase anon key")
+        save_config({"url": url, "key": key})
+        config = {"url": url, "key": key}
+
+    if owner is None:
+        owner = getpass.getuser()
+
+    vc = DawVC(Path.cwd())
+    if not vc.daw_dir.exists():
+        raise click.ClickException("Not a daw repository. Run 'daw init' first.")
+
+    remote = SupabaseRemote.from_config(config["url"], config["key"])
+    count = do_push(vc, remote, project_name=project_name, owner=owner)
+    if count == 0:
+        console.print("Everything up to date.")
+    else:
+        console.print(f"[green]Pushed {count} commit(s) to '{project_name}'[/green]")
+
+
+@cli.command()
+@click.option('--project', 'project_name', required=True, help='Project name on remote')
+@click.option('--owner', default=None, help='Owner name')
+def pull(project_name, owner):
+    """Pull commits from Supabase remote."""
+    import getpass
+    from src.remote.config import load_config
+    from src.remote.supabase_client import SupabaseRemote
+    from src.remote.sync import pull as do_pull
+
+    config = load_config()
+    if not config:
+        raise click.ClickException("No remote configured. Run 'daw push' first to set credentials.")
+
+    if owner is None:
+        owner = getpass.getuser()
+
+    vc = DawVC(Path.cwd())
+    if not vc.daw_dir.exists():
+        raise click.ClickException("Not a daw repository. Run 'daw init' first.")
+
+    remote = SupabaseRemote.from_config(config["url"], config["key"])
+    result = do_pull(vc, remote, project_name=project_name, owner=owner)
+
+    if result["status"] == "up-to-date":
+        console.print("Already up to date.")
+    elif result["status"] == "fast-forward":
+        console.print(f"[green]Pulled {result['count']} commit(s)[/green]")
+    elif result["status"] == "conflict":
+        console.print(f"[red]{result['message']}[/red]")
+        raise click.ClickException("Pull stopped due to divergence.")
+
+
+@cli.command()
+@click.argument('project_id')
+@click.option('--branch', default='main', help='Branch to clone')
+@click.option('--dir', 'dest', default=None, help='Destination directory (default: current dir)')
+def clone(project_id, branch, dest):
+    """Clone a project from Supabase into a local directory."""
+    from src.remote.config import load_config, save_config
+    from src.remote.supabase_client import SupabaseRemote
+    from src.remote.sync import clone as do_clone
+
+    config = load_config()
+    if not config:
+        url = click.prompt("Supabase project URL")
+        key = click.prompt("Supabase anon key")
+        save_config({"url": url, "key": key})
+        config = {"url": url, "key": key}
+
+    dest_path = Path(dest) if dest else Path.cwd()
+    remote = SupabaseRemote.from_config(config["url"], config["key"])
+
+    do_clone(dest_path, remote, project_id=project_id, branch=branch)
+    console.print(f"[green]Cloned project '{project_id}' branch '{branch}' into {dest_path}[/green]")
+
+
 if __name__ == '__main__':
     cli()
