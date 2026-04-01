@@ -1,62 +1,11 @@
 import click
 import json
-import shutil
 from pathlib import Path
-from datetime import datetime
-from src.utils import generate_hash
 from rich.console import Console
+from src.vc.engine import DawVC
 from src.fl_studio.diff.compare import compare
 
 console = Console()
-
-
-class DawVC:
-    def __init__(self, root_dir: Path):
-        self.root_dir = root_dir
-        self.daw_dir = root_dir / '.daw'
-        self.state_file = self.daw_dir / 'state.json'
-        self.commits_file = self.daw_dir / 'commits.json'
-        self.staged_file = self.daw_dir / 'staged.json'
-        self.objects_dir = self.daw_dir / 'objects'
-
-    def init(self):
-        self.daw_dir.mkdir(exist_ok=True)
-        self.objects_dir.mkdir(exist_ok=True)
-        self.state_file.write_text(json.dumps({"branch": "main", "head": None}))
-        self.commits_file.write_text(json.dumps([]))
-        self.staged_file.write_text(json.dumps([]))
-
-    def add(self, project_path: Path):
-        staged = json.loads(self.staged_file.read_text())
-        staged.append({'path': str(project_path)})
-        self.staged_file.write_text(json.dumps(staged))
-
-    def commit(self, message: str):
-        staged = json.loads(self.staged_file.read_text())
-        if not staged:
-            raise click.ClickException("Nothing to commit")
-
-        self.objects_dir.mkdir(exist_ok=True)
-        commits = json.loads(self.commits_file.read_text())
-        commit_hash = generate_hash()
-
-        for entry in staged:
-            src_path = Path(entry["path"])
-            if src_path.exists():
-                shutil.copy2(src_path, self.objects_dir / f"{commit_hash}.flp")
-
-        new_commit = {
-            "hash": commit_hash,
-            "message": message,
-            "timestamp": datetime.now().isoformat(),
-            "branch": "main",
-            "parent_hash": commits[-1]["hash"] if commits else None,
-            "changes": staged,
-        }
-        commits.append(new_commit)
-        self.commits_file.write_text(json.dumps(commits, default=str))
-        self.staged_file.write_text(json.dumps([]))
-        return commit_hash
 
 
 def _render_diff(diff: dict) -> None:
@@ -119,7 +68,10 @@ def commit(message):
     vc = DawVC(Path.cwd())
     if not vc.daw_dir.exists():
         raise click.ClickException("Not a daw repository. Run 'daw init' first.")
-    commit_hash = vc.commit(message)
+    try:
+        commit_hash = vc.commit(message)
+    except ValueError as e:
+        raise click.ClickException(str(e))
     console.print(f"[green]Committed {commit_hash}: {message}[/green]")
 
 
@@ -200,12 +152,69 @@ def log():
     vc = DawVC(Path.cwd())
     if not vc.daw_dir.exists():
         raise click.ClickException("Not a daw repository. Run 'daw init' first.")
-    commits = json.loads(vc.commits_file.read_text())
+
+    commits = vc.get_commits()
     if not commits:
         console.print("No commits yet.")
         return
-    for c in reversed(commits):
-        console.print(f"[yellow]{c['hash']}[/yellow] {c['message']} [dim]({c['timestamp']})[/dim]")
+
+    state = json.loads(vc.state_file.read_text())
+    current_branch = state["branch"]
+
+    for commit in reversed(commits):
+        branch_tag = f" [bold green]({current_branch})[/bold green]" if commit["hash"] == state["head"] else ""
+        console.print(f"[yellow]{commit['hash']}[/yellow]{branch_tag} {commit['message']}")
+        console.print(f"  [dim]{commit['timestamp']} on {commit['branch']}[/dim]")
+
+
+@cli.command()
+@click.argument('name')
+def branch(name):
+    """Create a new branch at current HEAD."""
+    vc = DawVC(Path.cwd())
+    if not vc.daw_dir.exists():
+        raise click.ClickException("Not a daw repository. Run 'daw init' first.")
+    try:
+        vc.create_branch(name)
+        console.print(f"[green]Created branch '{name}'[/green]")
+    except ValueError as e:
+        raise click.ClickException(str(e))
+
+
+@cli.command()
+@click.argument('ref')
+def checkout(ref):
+    """Switch to a branch or restore a commit snapshot."""
+    vc = DawVC(Path.cwd())
+    if not vc.daw_dir.exists():
+        raise click.ClickException("Not a daw repository. Run 'daw init' first.")
+    try:
+        vc.checkout(ref)
+        console.print(f"[green]Switched to '{ref}'[/green]")
+    except ValueError as e:
+        raise click.ClickException(str(e))
+
+
+@cli.command()
+@click.argument('branch_name')
+def merge(branch_name):
+    """Merge a branch into the current branch."""
+    vc = DawVC(Path.cwd())
+    if not vc.daw_dir.exists():
+        raise click.ClickException("Not a daw repository. Run 'daw init' first.")
+    try:
+        result = vc.merge(branch_name)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+
+    if result["status"] == "up-to-date":
+        console.print("Already up to date.")
+    elif result["status"] == "fast-forward":
+        console.print(f"[green]Fast-forward merge from '{branch_name}'[/green]")
+    elif result["status"] == "conflict":
+        for c in result["conflicts"]:
+            console.print(f"[red]CONFLICT: {c}[/red]")
+        raise click.ClickException("Merge failed due to conflicts.")
 
 
 if __name__ == '__main__':
