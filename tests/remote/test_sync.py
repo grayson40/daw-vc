@@ -117,3 +117,56 @@ def test_push_skips_already_pushed(tmp_path):
 
     mock_remote.upload_blob.assert_not_called()
     mock_remote.insert_commit.assert_not_called()
+
+
+from src.remote.sync import pull
+
+
+def test_pull_downloads_new_commits(tmp_path):
+    from src.vc.engine import DawVC
+
+    vc = DawVC(tmp_path)
+    vc.init()
+
+    remote_commits = [
+        {
+            "hash": "aabb1122",
+            "message": "remote work",
+            "branch": "main",
+            "timestamp": "2026-03-31T10:00:00",
+            "parent_hash": None,
+        }
+    ]
+
+    mock_remote = MagicMock()
+    mock_remote.ensure_project.return_value = "proj-uuid-123"
+    mock_remote.fetch_commits.return_value = remote_commits
+    mock_remote.download_blob.return_value = None
+
+    result = pull(vc, mock_remote, project_name="my-project", owner="user1")
+
+    assert result["status"] in ("fast-forward", "up-to-date", "conflict")
+    mock_remote.fetch_commits.assert_called_once()
+
+
+def test_pull_up_to_date(tmp_path):
+    from src.vc.engine import DawVC
+
+    vc = DawVC(tmp_path)
+    vc.init()
+    flp = tmp_path / "test.flp"
+    flp.write_bytes(b"FLP")
+    vc.add(flp)
+    commit_hash = vc.commit("local")
+
+    import json
+    state = json.loads((tmp_path / ".daw" / "state.json").read_text())
+    state["last_pushed_hash"] = commit_hash
+    (tmp_path / ".daw" / "state.json").write_text(json.dumps(state))
+
+    mock_remote = MagicMock()
+    mock_remote.ensure_project.return_value = "proj-uuid-123"
+    mock_remote.fetch_commits.return_value = []
+
+    result = pull(vc, mock_remote, project_name="my-project", owner="user1")
+    assert result["status"] == "up-to-date"
