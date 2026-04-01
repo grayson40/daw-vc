@@ -66,3 +66,54 @@ def test_fetch_commits_since(tmp_path):
     result = remote.fetch_commits("proj-uuid", "main")
     assert len(result) == 1
     assert result[0]["hash"] == "abc12345"
+
+
+from src.remote.sync import push
+
+
+def test_push_uploads_unpushed_commits(tmp_path):
+    from src.vc.engine import DawVC
+
+    vc = DawVC(tmp_path)
+    vc.init()
+    flp = tmp_path / "test.flp"
+    flp.write_bytes(b"FLP_DATA")
+    vc.add(flp)
+    commit_hash = vc.commit("initial")
+
+    mock_remote = MagicMock()
+    mock_remote.ensure_project.return_value = "proj-uuid-123"
+
+    push(vc, mock_remote, project_name="my-project", owner="user1")
+
+    mock_remote.ensure_project.assert_called_once_with("my-project", "user1")
+    mock_remote.upload_blob.assert_called_once()
+    mock_remote.insert_commit.assert_called_once()
+
+    import json
+    state = json.loads((tmp_path / ".daw" / "state.json").read_text())
+    assert state["last_pushed_hash"] == commit_hash
+
+
+def test_push_skips_already_pushed(tmp_path):
+    from src.vc.engine import DawVC
+
+    vc = DawVC(tmp_path)
+    vc.init()
+    flp = tmp_path / "test.flp"
+    flp.write_bytes(b"FLP_DATA")
+    vc.add(flp)
+    commit_hash = vc.commit("initial")
+
+    import json
+    state = json.loads((tmp_path / ".daw" / "state.json").read_text())
+    state["last_pushed_hash"] = commit_hash
+    (tmp_path / ".daw" / "state.json").write_text(json.dumps(state))
+
+    mock_remote = MagicMock()
+    mock_remote.ensure_project.return_value = "proj-uuid-123"
+
+    push(vc, mock_remote, project_name="my-project", owner="user1")
+
+    mock_remote.upload_blob.assert_not_called()
+    mock_remote.insert_commit.assert_not_called()
