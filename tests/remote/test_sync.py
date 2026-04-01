@@ -170,3 +170,33 @@ def test_pull_up_to_date(tmp_path):
 
     result = pull(vc, mock_remote, project_name="my-project", owner="user1")
     assert result["status"] == "up-to-date"
+
+
+from src.remote.sync import clone
+
+
+def test_clone_initializes_and_pulls(tmp_path):
+    remote_commits = [
+        {
+            "hash": "aabb1122",
+            "message": "initial",
+            "branch": "main",
+            "timestamp": "2026-03-31T10:00:00",
+            "parent_hash": None,
+        }
+    ]
+
+    mock_remote = MagicMock()
+    mock_remote.fetch_commits.return_value = remote_commits
+    mock_remote.download_blob.return_value = None
+
+    clone_dir = tmp_path / "cloned"
+    clone_dir.mkdir()
+
+    clone(clone_dir, mock_remote, project_id="proj-uuid-123", branch="main")
+
+    assert (clone_dir / ".daw").is_dir()
+    import json
+    commits = json.loads((clone_dir / ".daw" / "commits.json").read_text())
+    assert len(commits) == 1
+    assert commits[0]["hash"] == "aabb1122"
