@@ -22,3 +22,4 @@ rich==13.9.4
 sortedcontainers==2.4.0
 tomli==2.2.1
 typing_extensions==4.12.2
+supabase>=2.0.0
