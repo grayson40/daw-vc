@@ -1,2 +1,4 @@
 venv/
 .idea/
+daw.egg-info/
+.worktrees/
