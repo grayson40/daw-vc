@@ -306,5 +306,19 @@ def clone(project_id, branch, dest):
     console.print(f"[green]Cloned project '{project_id}' branch '{branch}' into {dest_path}[/green]")
 
 
+@cli.command()
+def migrate():
+    """One-shot: migrate legacy <commit_hash>.flp objects to content-addressed <blob_sha>."""
+    from src.vc.migrate import migrate_objects
+    vc = DawVC(Path.cwd())
+    if not vc.daw_dir.exists():
+        raise click.ClickException("Not a daw repository.")
+    count = migrate_objects(vc)
+    if count == 0:
+        console.print("Nothing to migrate.")
+    else:
+        console.print(f"[green]Migrated {count} object(s) to content-addressed storage.[/green]")
+
+
 if __name__ == '__main__':
     cli()
