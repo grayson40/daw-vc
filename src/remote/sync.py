@@ -28,7 +28,11 @@ def push(vc: DawVC, remote: SupabaseRemote, project_name: str, owner: str) -> in
     project_id = remote.ensure_project(project_name, owner)
 
     for commit in to_push:
-        snapshot = vc.objects_dir / f"{commit['hash']}.flp"
+        blob_sha = commit.get("blob_sha")
+        if blob_sha:
+            snapshot = vc.objects_dir / blob_sha
+        else:
+            snapshot = vc.objects_dir / f"{commit['hash']}.flp"
         if snapshot.exists():
             remote.upload_blob(project_id, commit["hash"], snapshot)
         remote.insert_commit(project_id, commit)

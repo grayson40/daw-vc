@@ -69,6 +69,8 @@ class DawVC:
         self.staged_file.write_text(json.dumps(staged))
 
     def commit(self, message: str) -> str:
+        from src.vc.blob import hash_file, blob_path
+
         staged = json.loads(self.staged_file.read_text())
         if not staged:
             raise ValueError("Nothing to commit")
@@ -77,10 +79,14 @@ class DawVC:
         commits = self._read_commits()
         commit_hash = _generate_hash()
 
+        blob_sha: Optional[str] = None
         for entry in staged:
             src_path = Path(entry["path"])
             if src_path.exists():
-                shutil.copy2(src_path, self.objects_dir / f"{commit_hash}.flp")
+                blob_sha = hash_file(src_path)
+                dest = blob_path(self.objects_dir, blob_sha)
+                if not dest.exists():
+                    shutil.copy2(src_path, dest)
 
         new_commit = Commit(
             hash=commit_hash,
@@ -90,7 +96,9 @@ class DawVC:
             parent_hash=state["head"],
             changes=staged,
         )
-        commits.append(asdict(new_commit))
+        commit_dict = asdict(new_commit)
+        commit_dict["blob_sha"] = blob_sha
+        commits.append(commit_dict)
         self._write_commits(commits)
 
         state["head"] = commit_hash

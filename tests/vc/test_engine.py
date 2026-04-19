@@ -110,3 +110,37 @@ def test_merge_already_up_to_date(tmp_path):
     vc.create_branch("feature")
     result = vc.merge("feature")
     assert result["status"] == "up-to-date"
+
+
+from src.vc.blob import hash_file
+
+
+def test_commit_stores_blob_by_sha(tmp_path: Path):
+    (tmp_path / "song.flp").write_bytes(b"fake flp bytes")
+    vc = DawVC(tmp_path)
+    vc.init()
+    vc.add(tmp_path / "song.flp")
+    commit_hash = vc.commit("init")
+
+    blob_sha = hash_file(tmp_path / "song.flp")
+    assert (vc.objects_dir / blob_sha).exists()
+    assert (vc.objects_dir / blob_sha).read_bytes() == b"fake flp bytes"
+
+    commits = vc.get_commits()
+    assert commits[-1]["hash"] == commit_hash
+    assert commits[-1]["blob_sha"] == blob_sha
+
+
+def test_commit_deduplicates_identical_bytes(tmp_path: Path):
+    (tmp_path / "a.flp").write_bytes(b"same bytes")
+    vc = DawVC(tmp_path)
+    vc.init()
+    vc.add(tmp_path / "a.flp")
+    vc.commit("one")
+
+    (tmp_path / "a.flp").write_bytes(b"same bytes")  # unchanged
+    vc.add(tmp_path / "a.flp")
+    vc.commit("two")
+
+    blobs = [p for p in vc.objects_dir.iterdir() if not p.name.endswith(".diff.json")]
+    assert len(blobs) == 1  # dedup
