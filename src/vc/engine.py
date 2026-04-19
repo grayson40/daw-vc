@@ -144,10 +144,11 @@ class DawVC:
                 raise ValueError(f"Branch or commit '{ref}' not found")
 
         if target_hash:
-            snapshot = self.objects_dir / f"{target_hash}.flp"
-            if snapshot.exists():
-                commit = next((c for c in commits if c["hash"] == target_hash), None)
-                if commit and commit.get("changes"):
+            commit = next((c for c in commits if c["hash"] == target_hash), None)
+            if commit and commit.get("blob_sha") and commit.get("changes"):
+                from src.vc.blob import blob_path
+                snapshot = blob_path(self.objects_dir, commit["blob_sha"])
+                if snapshot.exists():
                     for entry in commit["changes"]:
                         dest = Path(entry["path"])
                         if dest.parent.exists():
@@ -181,13 +182,15 @@ class DawVC:
 
         if our_hash is None or our_hash in self._ancestor_hashes(commits, their_hash):
             if their_hash:
-                snapshot = self.objects_dir / f"{their_hash}.flp"
                 commit = next((c for c in commits if c["hash"] == their_hash), None)
-                if commit and commit.get("changes") and snapshot.exists():
-                    for entry in commit["changes"]:
-                        dest = Path(entry["path"])
-                        if dest.parent.exists():
-                            shutil.copy2(snapshot, dest)
+                if commit and commit.get("blob_sha") and commit.get("changes"):
+                    from src.vc.blob import blob_path
+                    snapshot = blob_path(self.objects_dir, commit["blob_sha"])
+                    if snapshot.exists():
+                        for entry in commit["changes"]:
+                            dest = Path(entry["path"])
+                            if dest.parent.exists():
+                                shutil.copy2(snapshot, dest)
 
             state["head"] = their_hash
             self._write_state(state)

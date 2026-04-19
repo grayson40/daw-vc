@@ -144,3 +144,18 @@ def test_commit_deduplicates_identical_bytes(tmp_path: Path):
 
     blobs = [p for p in vc.objects_dir.iterdir() if not p.name.endswith(".diff.json")]
     assert len(blobs) == 1  # dedup
+
+
+def test_checkout_restores_from_blob_sha(tmp_path: Path):
+    (tmp_path / "song.flp").write_bytes(b"v1 bytes")
+    vc = DawVC(tmp_path)
+    vc.init()
+    vc.add(tmp_path / "song.flp")
+    c1 = vc.commit("v1")
+
+    (tmp_path / "song.flp").write_bytes(b"v2 bytes")
+    vc.add(tmp_path / "song.flp")
+    vc.commit("v2")
+
+    vc.checkout(c1)
+    assert (tmp_path / "song.flp").read_bytes() == b"v1 bytes"
